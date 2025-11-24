@@ -1,5 +1,3 @@
-# google_sheets_cleaner.py
-
 import os
 import json
 import re
@@ -111,7 +109,7 @@ def run_cleaning_process():
 
     try:
         # -----------------------------
-        # AUTHENTICATE (UPDATED)
+        # AUTHENTICATE
         # -----------------------------
         service_account_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
         if not service_account_json:
@@ -263,7 +261,7 @@ def run_cleaning_process():
         log(f"Updated process sheet with {len(df_process)} rows.", client)
 
         # -----------------------------
-        # APPEND NEW DATA TO CLEANED SHEET
+        # APPEND NEW DATA TO CLEANED SHEET (FIXED LOGIC)
         # -----------------------------
         cleaned_vals = cleaned_sheet.get_all_values()
 
@@ -283,24 +281,21 @@ def run_cleaning_process():
         df_cleaned = pd.DataFrame(cleaned_vals[1:], columns=cleaned_vals[0])
         df_cleaned["Date"] = pd.to_datetime(df_cleaned["Date"], errors="coerce")
 
-        df_process["Date_dt"] = pd.to_datetime(df_process["Date"], errors="coerce")
-        max_existing_date = df_cleaned["Date"].max()
-
         existing_pairs = set(
             (str(d.date()), n)
             for d, n in zip(df_cleaned["Date"], df_cleaned["Network"])
         )
 
+        df_process["Date_dt"] = pd.to_datetime(df_process["Date"], errors="coerce")
         df_process["Date_only"] = df_process["Date_dt"].dt.date
 
-        mask_new_date = df_process["Date_dt"] > max_existing_date
-        mask_new_pair = df_process.apply(
-            lambda r: (str(r["Date_only"]), r["Network"]) not in existing_pairs,
-            axis=1
-        )
-        mask_final = mask_new_date & mask_new_pair
+        df_to_append = df_process[
+            df_process.apply(
+                lambda r: (str(r["Date_only"]), r["Network"]) not in existing_pairs,
+                axis=1
+            )
+        ].copy()
 
-        df_to_append = df_process[mask_final].copy()
         df_to_append = df_to_append.drop(columns=["Date_dt", "Date_only"], errors="ignore")
 
         if df_to_append.empty:
