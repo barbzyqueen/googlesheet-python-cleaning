@@ -6,7 +6,7 @@ import re
 import gspread
 import pandas as pd
 from datetime import datetime
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2 import service_account
 from typing import List, Optional
 
 # -----------------------------
@@ -36,6 +36,7 @@ def log(message: str, client):
 
     log_sheet.append_row([timestamp, message])
 
+
 # ---------------------------------------------------------
 # DATE PARSER
 # ---------------------------------------------------------
@@ -59,7 +60,6 @@ def parse_date_try_formats(date_str: str) -> Optional[datetime]:
         except Exception:
             continue
 
-    # Last fallback using pandas
     try:
         parsed = pd.to_datetime(s, errors="coerce")
         if pd.isna(parsed):
@@ -67,6 +67,7 @@ def parse_date_try_formats(date_str: str) -> Optional[datetime]:
         return parsed.to_pydatetime()
     except Exception:
         return None
+
 
 # ---------------------------------------------------------
 # FIND NETWORK NAME
@@ -91,6 +92,7 @@ def find_network_name_in_header(cells: List[str]) -> str:
 
     return "UNKNOWN"
 
+
 # ---------------------------------------------------------
 # MAIN CLEANING FUNCTION (FastAPI calls this)
 # ---------------------------------------------------------
@@ -109,7 +111,7 @@ def run_cleaning_process():
 
     try:
         # -----------------------------
-        # AUTHENTICATE
+        # AUTHENTICATE (UPDATED)
         # -----------------------------
         service_account_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
         if not service_account_json:
@@ -117,13 +119,14 @@ def run_cleaning_process():
 
         credentials_dict = json.loads(service_account_json)
         scope = [
-            "https://spreadsheets.google.com/feeds",
             "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive.file",
             "https://www.googleapis.com/auth/drive",
         ]
 
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
+        creds = service_account.Credentials.from_service_account_info(
+            credentials_dict,
+            scopes=scope
+        )
         client = gspread.authorize(creds)
 
         # Open sheets
@@ -312,7 +315,6 @@ def run_cleaning_process():
         return f"Appended {len(df_to_append)} new rows."
 
     except Exception as e:
-        # SAFELY LOG ERRORS
         if client:
             try:
                 log(f"Error: {repr(e)}", client)
