@@ -9,10 +9,6 @@ from datetime import datetime
 from google.oauth2 import service_account
 from typing import List, Optional
 
-
-# -----------------------------
-# CONFIG
-# -----------------------------
 RAW_SHEET_NAME = "trends-history"
 PROCESS_SHEET_NAME = "trends-history-process"
 CLEANED_SHEET_NAME = "trends-history-cleaned"
@@ -23,7 +19,6 @@ LOG_SHEET_NAME = "automation-log"
 # LOGGING
 # ---------------------------------------------------------
 def log(message: str, client):
-    """Write timestamped log message to automation-log sheet."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     try:
@@ -61,7 +56,6 @@ def parse_date_try_formats(date_str: str) -> Optional[datetime]:
         except Exception:
             pass
 
-    # pandas fallback
     try:
         parsed = pd.to_datetime(s, errors="coerce")
         if pd.isna(parsed):
@@ -84,7 +78,6 @@ def find_network_name_in_header(cells: List[str]) -> str:
         if ":" in text:
             return text.split(":")[0].strip()
 
-    # fallback
     joined = " ".join([str(c) for c in cells if c])
     m = re.search(r"([A-Za-z0-9 &\-\_\.]+)\s*:", joined)
     if m:
@@ -100,9 +93,7 @@ def run_cleaning_process():
     client = None
 
     try:
-        # -----------------------------
         # AUTH
-        # -----------------------------
         json_content = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
         if not json_content:
             return "Error: GOOGLE_SERVICE_ACCOUNT_JSON not set"
@@ -124,16 +115,12 @@ def run_cleaning_process():
 
         log("----- Script Started -----", client)
 
-        # -----------------------------
         # LOAD RAW
-        # -----------------------------
         raw_rows = raw_sheet.get_all_values()
         max_cols = max((len(r) for r in raw_rows), default=0)
         rows = [r + [""] * (max_cols - len(r)) for r in raw_rows]
 
-        # -----------------------------
         # DETECT BLOCKS
-        # -----------------------------
         blocks = []
         i = 0
         n = len(rows)
@@ -173,9 +160,7 @@ def run_cleaning_process():
 
         log(f"Detected {len(blocks)} blocks.", client)
 
-        # -----------------------------
         # PARSE BLOCKS
-        # -----------------------------
         cleaned_blocks = []
 
         for block in blocks:
@@ -215,12 +200,14 @@ def run_cleaning_process():
             log("No valid blocks.", client)
             return "No valid data."
 
+        # CONCAT AND REMOVE DUPLICATES ACROSS BLOCKS (NEW FIX)
         df_process = pd.concat(cleaned_blocks, ignore_index=True)
+
+        df_process = df_process.drop_duplicates(subset=["Date", "Network"])
+
         df_process = df_process.sort_values(["Network", "Date"]).reset_index(drop=True)
 
-        # -----------------------------
         # WRITE PROCESS SHEET
-        # -----------------------------
         process_sheet.clear()
         process_sheet.update(
             [df_process.columns.tolist()] + df_process.astype(str).values.tolist()
@@ -228,12 +215,10 @@ def run_cleaning_process():
 
         log(f"Updated process sheet ({len(df_process)} rows).", client)
 
-        # -----------------------------
         # LOAD CLEANED SHEET
-        # -----------------------------
         cleaned_vals = cleaned_sheet.get_all_values()
 
-        if len(cleaned_vals) <= 1:  # empty
+        if len(cleaned_vals) <= 1:
             cleaned_sheet.clear()
             cleaned_sheet.update(
                 [df_process.columns.tolist()] +
@@ -248,13 +233,11 @@ def run_cleaning_process():
         df_process["Date_dt"] = pd.to_datetime(df_process["Date"], errors="coerce")
         df_process["Date_only"] = df_process["Date_dt"].dt.date
 
-        # Build duplicate map
         existing_pairs = set(
             (str(d.date()), net)
             for d, net in zip(df_cleaned["Date"], df_cleaned["Network"])
         )
 
-        # Filter new rows correctly
         def is_new(row):
             key = (str(row["Date_only"]), row["Network"])
             return key not in existing_pairs
