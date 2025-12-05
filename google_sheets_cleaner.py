@@ -99,6 +99,7 @@ def run_cleaning_process():
             return "Error: GOOGLE_SERVICE_ACCOUNT_JSON not set"
 
         creds_dict = json.loads(json_content)
+        
         scope = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive",

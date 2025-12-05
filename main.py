@@ -4,7 +4,7 @@ import uvicorn
 import os
 
 # --------------------------------
-# Import the correct cleaning function
+# Import your cleaning function
 # --------------------------------
 from google_sheets_cleaner import run_cleaning_process
 
@@ -14,7 +14,7 @@ from google_sheets_cleaner import run_cleaning_process
 # --------------------------------
 app = FastAPI()
 
-# Allow all origins (so n8n can call it)
+# Allow all origins (so n8n / Make / browser can call it)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,21 +25,27 @@ app.add_middleware(
 
 
 # --------------------------------
-# Health Check
+# Root Health Check (Render uses this)
 # --------------------------------
 @app.get("/")
 async def health_check():
-    return {"status": "OK", "message": "Server running"}
+    return {
+        "status": "OK",
+        "message": "Server running successfully",
+        "endpoint": "/run-cleaning"
+    }
 
 
 # --------------------------------
-# Endpoint to trigger the script
+# Run Cleaning Workflow
+# Allow GET (browser testing) and POST (API usage)
 # --------------------------------
+@app.get("/run-cleaning")
 @app.post("/run-cleaning")
 async def run_cleaning_endpoint():
     """
-    This endpoint triggers your Google Sheets cleaning workflow.
-    n8n or Make.com will call this URL.
+    Trigger the Google Sheets cleaning workflow.
+    Accessible from browser (GET) and n8n/Make (POST).
     """
     try:
         result = run_cleaning_process()
@@ -50,9 +56,9 @@ async def run_cleaning_endpoint():
 
 
 # --------------------------------
-# Uvicorn server launch for Render
+# Local / Render Server Runner
 # --------------------------------
 if __name__ == "__main__":
-    # Render provides the PORT environment variable
+    # Render provides PORT dynamically
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
